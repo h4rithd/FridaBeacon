@@ -1,0 +1,49 @@
+name: Publish release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - name: Validate tag and scripts
+        run: |
+          version=$(sed -n 's/^version=//p' module/module.prop)
+          test "$GITHUB_REF_NAME" = "v$version"
+          for script in module/*.sh; do sh -n "$script"; done
+          python3 -m py_compile build.py android/build.py
+
+      - name: Build Magisk ZIP
+        run: python3 build.py
+
+      - name: Verify ZIP and write checksum
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          archive = next(Path('dist').glob('FridaBeacon-v*.zip'))
+          with ZipFile(archive) as package:
+              assert package.testzip() is None
+              assert all(package.read(name) ==
+                         (Path('LICENSE') if name == 'LICENSE' else Path('module') / name).read_bytes()
+                         for name in package.namelist())
+              assert not any(name.startswith('assets/') for name in package.namelist())
+          PY
+          cd dist
+          sha256sum FridaBeacon-v*.zip > SHA256SUMS
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/FridaBeacon-v*.zip dist/SHA256SUMS \
+            --title "FridaBeacon ${GITHUB_REF_NAME#v}" \
+            --notes-file RELEASE_NOTES.md --verify-tag

@@ -1,0 +1,6 @@
+id=fridabeacon
+name=🔴 FridaBeacon
+version=1.0
+versionCode=1
+author=Harith Dilshan (h4rithd.com)
+description=Stopped • Android Frida server for Magisk. Tap Action to start; use the built-in updater for new releases.
